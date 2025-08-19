@@ -41,22 +41,27 @@ class Analyzer():
         )
 
         self.level_regex = re.compile(r"\b(?:DEBUG|INFO|WARNING|ERROR|CRITICAL)\b")
-
-    def get_data(self):
+    
+    def _generator(self):
         path = SCRIPT_DIR / "example.log"
-        counter_levels: Counter = Counter()
-        counter_dates: Counter = Counter()
         with path.open(mode='r', encoding='utf-8') as file:
             for log_line in file:
-                match_levels = self.level_regex.search(log_line)
-                match_date = self.date_regex.search(log_line)
-                match_time = self.time_regex.search(log_line)
-                match_full_timestamp = self.full_timestamp_regex.search(log_line)
-                if match_levels:
-                    counter_levels[match_levels.group()] += 1
-                if match_full_timestamp:
-                    counter_dates[match_date.group()] += 1
-                    print(match_full_timestamp.group())
+                yield log_line
+
+    def get_data(self):
+        counter_levels: Counter = Counter()
+        counter_dates: Counter = Counter()
+        log_lines = self._generator()
+        for log_line in log_lines:
+            match_levels = self.level_regex.search(log_line)
+            match_date = self.date_regex.search(log_line)
+            match_time = self.time_regex.search(log_line)
+            match_full_timestamp = self.full_timestamp_regex.search(log_line)
+            if match_levels:
+                counter_levels[match_levels.group()] += 1
+            if match_full_timestamp:
+                counter_dates[match_date.group()] += 1
+                print(match_full_timestamp.group())
 
         log_levels: dict = dict(counter_levels)
         logs_per_day: dict = dict(counter_dates)   
