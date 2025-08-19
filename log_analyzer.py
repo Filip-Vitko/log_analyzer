@@ -47,11 +47,16 @@ class Analyzer():
         with path.open(mode='r', encoding='utf-8') as file:
             for log_line in file:
                 yield log_line
+    
+    def _cache_logs(self):
+        if not hasattr(self, '_cached_logs'):
+            self._cached_logs = list(self._generator())
+        return self._cached_logs
 
     def get_data(self):
         counter_levels: Counter = Counter()
         counter_dates: Counter = Counter()
-        log_lines = self._generator()
+        log_lines = self._cache_logs()
         for log_line in log_lines:
             match_levels = self.level_regex.search(log_line)
             match_date = self.date_regex.search(log_line)
