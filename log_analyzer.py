@@ -4,8 +4,9 @@ import datetime
 from pathlib import Path
 from datetime import datetime, timedelta
 from collections import Counter
-from dataclasses import dataclass
-from typing import List, Dict, Tuple
+from dataclasses import dataclass, field
+import time
+from typing import List, Dict, Tuple, Optional
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 
@@ -15,10 +16,10 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 
 @dataclass
 class LogStatus:
-    log_levels: Dict[str, int]
-    logs_per_day: Dict[str, int]
-    time_range: Tuple[datetime, datetime]
-    total_duration: timedelta
+    log_levels: Dict[str, int] = field(default_factory=dict)
+    logs_per_day: Dict[str, int] = field(default_factory=dict)
+    time_range: Tuple[datetime, datetime] = field(default_factory=lambda: (None, None))
+    total_duration: timedelta = field(default_factory=timedelta)
 
 class Analyzer():
     def __init__(self):
@@ -42,40 +43,57 @@ class Analyzer():
 
         self.level_regex = re.compile(r"\b(?:DEBUG|INFO|WARNING|ERROR|CRITICAL)\b")
     
-    def _generator(self):
+    def _iter_lines(self):
         path = SCRIPT_DIR / "example.log"
         with path.open(mode='r', encoding='utf-8') as file:
-            for log_line in file:
-                yield log_line
+            for line in file:
+                yield line.rsplit("\n")
     
-    def _cache_logs(self):
+    def _cache_logs(self) -> list[str]:
         if not hasattr(self, '_cached_logs'):
-            self._cached_logs = list(self._generator())
+            self._cached_logs = list(self._iter_lines())
         return self._cached_logs
 
-    def get_data(self):
-        counter_levels: Counter = Counter()
-        counter_dates: Counter = Counter()
+    def get_data(self) -> LogStatus:
         log_lines = self._cache_logs()
-        for log_line in log_lines:
-            match_levels = self.level_regex.search(log_line)
-            match_date = self.date_regex.search(log_line)
-            match_time = self.time_regex.search(log_line)
-            match_full_timestamp = self.full_timestamp_regex.search(log_line)
-            if match_levels:
-                counter_levels[match_levels.group()] += 1
-            if match_full_timestamp:
-                counter_dates[match_date.group()] += 1
-                print(match_full_timestamp.group())
 
-        log_levels: dict = dict(counter_levels)
-        logs_per_day: dict = dict(counter_dates)   
         return LogStatus(
-                log_levels=log_levels,
-                logs_per_day=logs_per_day,
-                time_range=(datetime.now(), datetime.now()),
+                log_levels=self.get_log_levels(),
+                logs_per_day=self.get_logs_per_day(),
+                time_range=self.get_time(),
                 total_duration=timedelta(seconds=0)
             )
+
+    def get_log_levels(self) -> Dict[str, int]:
+        counter = Counter()
+        log_lines = self._cache_logs()
+        for log_line in log_lines:
+            match = self.level_regex.search(log_line)
+            if match:
+                counter[match.group()] += 1
+
+        return dict(counter)
+
+    def get_logs_per_day(self) -> dict:
+        counter = Counter()
+        log_lines = self._cache_logs()
+        for log_line in log_lines:
+            match = self.date_regex.search(log_line)
+            if match:
+                counter[match.group()] += 1
+        
+        return dict(counter)
+
+    def get_time(self) -> Tuple:
+        fmt = "%Y-%m-%d %H:%M:%S"
+        log_lines = self._cache_logs()
+        first = datetime.strptime(self.full_timestamp_regex.search(log_lines[0]).group(), fmt)
+        last  = datetime.strptime(self.full_timestamp_regex.search(log_lines[-1]).group(), fmt)
+        print(last - first)
+        return (first, last)
+    
+    # TODO: add helppers
+    # ---------- helpers ----------
 
 def clear():
     os.system('cls' if os.name == 'nt' else 'clear')
