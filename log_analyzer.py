@@ -7,6 +7,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 import time
 from typing import List, Dict, Tuple, Optional
+import sys
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 
@@ -23,6 +24,9 @@ class LogStatus:
 
     def __post_init__(self):
         start, end = self.time_range
+        if not start or not end:
+            print("No valid timestamps found.", file=sys.stderr)
+            sys.exit(2)
         self.total_duration = (end - start) if start and end else timedelta(0)
 
 class Analyzer():
@@ -96,8 +100,11 @@ class Analyzer():
     def get_time(self) -> Tuple:
         fmt = "%Y-%m-%d %H:%M:%S"
         log_lines = self._cache_logs()
-        start = datetime.strptime(self.full_timestamp_regex.search(log_lines[0]).group(), fmt)
-        end  = datetime.strptime(self.full_timestamp_regex.search(log_lines[-1]).group(), fmt)
+        def parse(line):
+            m = self.full_timestamp_regex.search(line)
+            return datetime.strptime(m.group(), fmt) if m else None
+        start = next((dt for dt in (parse(l) for l in log_lines) if dt), None)
+        end  = next((dt for dt in (parse(l) for l in reversed(log_lines)) if dt), None)
         return (start, end)
     
     # TODO: add helpper functions
@@ -126,10 +133,11 @@ def output(analyzer):
     print("📊 Log Summary Report")
     print("=" * 50, end="\n\n")
     print("🔹 Log Levels:")
-    print(f"INFO   : {log_status.log_levels['INFO']}")
-    print(f"WARNING: {log_status.log_levels['WARNING']}")
-    print(f"ERROR  : {log_status.log_levels['ERROR']}")
-    print(f"DEBUG  : {log_status.log_levels['DEBUG']}", end="\n\n")
+    print(f"INFO    : {log_status.log_levels.get('INFO', 0)}")
+    print(f"WARNING : {log_status.log_levels.get('WARNING', 0)}")
+    print(f"ERROR   : {log_status.log_levels.get('ERROR', 0)}")
+    print(f"DEBUG   : {log_status.log_levels.get('DEBUG', 0)}")
+    print(f"CRITICAL: {log_status.log_levels.get('CRITICAL', 0)}", end="\n\n")
     print("🔹 Logs Per Day:")
     for key, val in log_status.logs_per_day.items():
         print(f"{key}: {val} entries")
@@ -142,12 +150,6 @@ def output(analyzer):
 def main():
     clear()
     analyzer = Analyzer()
-    log_status = analyzer.get_data()
-    print(log_status.log_levels)
-    print(log_status.logs_per_day)
-    print(log_status.time_range)
-    print(log_status.total_duration)
-    print(type(log_status.logs_per_day))
     output(analyzer)
 
 main()
