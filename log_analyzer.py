@@ -19,7 +19,11 @@ class LogStatus:
     log_levels: Dict[str, int] = field(default_factory=dict)
     logs_per_day: Dict[str, int] = field(default_factory=dict)
     time_range: Tuple[datetime, datetime] = field(default_factory=lambda: (None, None))
-    total_duration: timedelta = field(default_factory=timedelta)
+    total_duration: timedelta = field(init=False)
+
+    def __post_init__(self):
+        start, end = self.time_range
+        self.total_duration = (end - start) if start and end else timedelta(0)
 
 class Analyzer():
     def __init__(self):
@@ -42,12 +46,20 @@ class Analyzer():
         )
 
         self.level_regex = re.compile(r"\b(?:DEBUG|INFO|WARNING|ERROR|CRITICAL)\b")
-    
+
+        self._dt_formats = [
+            "%Y-%m-%d %H:%M:%S",
+            "%Y/%m/%d %H:%M:%S",
+            "%d-%m-%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M:%S",
+            "%d-%m-%y %H:%M:%S",
+        ]
+
     def _iter_lines(self):
         path = SCRIPT_DIR / "example.log"
         with path.open(mode='r', encoding='utf-8') as file:
             for line in file:
-                yield line.rsplit("\n")
+                yield line
     
     def _cache_logs(self) -> list[str]:
         if not hasattr(self, '_cached_logs'):
@@ -55,13 +67,10 @@ class Analyzer():
         return self._cached_logs
 
     def get_data(self) -> LogStatus:
-        log_lines = self._cache_logs()
-
         return LogStatus(
                 log_levels=self.get_log_levels(),
                 logs_per_day=self.get_logs_per_day(),
-                time_range=self.get_time(),
-                total_duration=timedelta(seconds=0)
+                time_range=self.get_time()
             )
 
     def get_log_levels(self) -> Dict[str, int]:
@@ -87,13 +96,21 @@ class Analyzer():
     def get_time(self) -> Tuple:
         fmt = "%Y-%m-%d %H:%M:%S"
         log_lines = self._cache_logs()
-        first = datetime.strptime(self.full_timestamp_regex.search(log_lines[0]).group(), fmt)
-        last  = datetime.strptime(self.full_timestamp_regex.search(log_lines[-1]).group(), fmt)
-        print(last - first)
-        return (first, last)
+        start = datetime.strptime(self.full_timestamp_regex.search(log_lines[0]).group(), fmt)
+        end  = datetime.strptime(self.full_timestamp_regex.search(log_lines[-1]).group(), fmt)
+        return (start, end)
     
-    # TODO: add helppers
+    # TODO: add helpper functions
     # ---------- helpers ----------
+
+    def _normalize_datetime_string(self, s: str) -> str:
+        pass
+
+    def _extract_first_timestamp(self, line: str) -> Optional[datetime]:
+        pass
+
+    def _normalize_date_only(self, s: str) -> Optional[str]:
+        pass
 
 def clear():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -101,22 +118,26 @@ def clear():
 def json_output():
     pass
 
-def output():
+def output(analyzer):
     clear()
+    log_status = analyzer.get_data()
+    start, end = log_status.time_range
+
     print("📊 Log Summary Report")
     print("=" * 50, end="\n\n")
     print("🔹 Log Levels:")
-    print("INFO   : 2")
-    print("WARNING: 1")
-    print("ERROR  : 1")
-    print("DEBUG  : 1", end="\n\n")
+    print(f"INFO   : {log_status.log_levels['INFO']}")
+    print(f"WARNING: {log_status.log_levels['WARNING']}")
+    print(f"ERROR  : {log_status.log_levels['ERROR']}")
+    print(f"DEBUG  : {log_status.log_levels['DEBUG']}", end="\n\n")
     print("🔹 Logs Per Day:")
-    print("{Date(1)}: {count} entries")
-    print("{Date(n)}: {count} entries", end="\n\n")
+    for key, val in log_status.logs_per_day.items():
+        print(f"{key}: {val} entries")
+    print()
     print("🔹 Time Range:")
-    print("From: {start_time}")
-    print("To:   {end_time}")
-    print("Total Duration: {end_time - start_time}")
+    print(f"From: {start}")
+    print(f"To:   {end}")
+    print(f"Total Duration: {log_status.total_duration}")
 
 def main():
     clear()
@@ -126,5 +147,7 @@ def main():
     print(log_status.logs_per_day)
     print(log_status.time_range)
     print(log_status.total_duration)
+    print(type(log_status.logs_per_day))
+    output(analyzer)
 
 main()
